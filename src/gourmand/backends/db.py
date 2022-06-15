@@ -1,4 +1,3 @@
-import os.path
 import re
 import shutil
 import time
@@ -9,7 +8,8 @@ import sqlalchemy
 import sqlalchemy.orm
 from gi.repository import Gtk
 from sqlalchemy import (Boolean, Column, Float, ForeignKey, Integer,
-                        LargeBinary, Numeric, String, Table, Text, event, func)
+                        LargeBinary, Numeric, String, Table, Text,
+                        event, func, select)
 from sqlalchemy.sql import and_, case, or_
 
 import gourmand.__version__
@@ -187,19 +187,7 @@ class RecData (Pluggable):
 
         This should also set self.new_db accordingly"""
         debug('Initializing DB connection',1)
-        def instr(s,subs): return s.lower().find(subs.lower())+1
-
-        # End REGEXP workaround
-
-        # Continue setting up connection...
-        if self.filename:
-            if not os.path.exists(self.filename):
-                print("First time? We're setting you up with yummy recipes.")
-                source_file = Path(__file__).parent.absolute() / 'default.db'
-                shutil.copyfile(source_file, self.filename)
-            self.new_db = False
-        else:
-            self.new_db = True  # TODO: this bool can be refactored out.
+        self.new_db = False  # TODO: this bool can be refactored out
 
         if self.url.startswith('mysql'):
             self.db = sqlalchemy.create_engine(self.url,
@@ -741,9 +729,9 @@ class RecData (Pluggable):
         """Return the number of rows in table that match criteria
         """
         if criteria:
-            return table.count(*make_simple_select_arg(criteria,table)).execute().fetchone()[0]
+            return select(func.count(criteria)).select_from(table).scalar()
         else:
-            return table.count().execute().fetchone()[0]
+            return select(func.count()).select_from(table).scalar()
 
     def fetch_join (self, table1, table2, col1, col2,
                     column_names=None, sort_by=None, **criteria):
@@ -765,7 +753,7 @@ class RecData (Pluggable):
             where_statement,
             distinct=True).execute().fetchall()]
 
-    def search_nutrition (self, words, group=None):
+    def search_nutrition(self, words: List[str], group=None):
         """Search nutritional information for ingredient keys."""
         where_statement = and_(
             *[self.nutrition_table.c.desc.like('%%%s%%'%w)
